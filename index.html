@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Code Metrics Treemap</title>
+    <!-- External stylesheet & d3.js -->
+    <link rel="stylesheet" href="style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  </head>
+  <body class="min-h-screen flex flex-col">
+    <header class="px-4 py-2 shadow-md bg-white flex flex-wrap gap-4 items-center">
+      <h1 class="text-xl font-semibold grow">Code Metrics Treemap</h1>
+      <label class="text-sm font-medium">Load JSON:
+        <input id="fileInput" type="file" accept="application/json" class="ml-2" />
+      </label>
+      <label class="text-sm font-medium">Colour metric:
+        <select id="metricSelect" class="ml-2 border rounded p-1">
+          <option value="cyclomatic_complexity">Cyclomatic complexity</option>
+          <option value="expressions">Expressions</option>
+          <option value="statements">Statements</option>
+          <option value="lines">Lines</option>
+          <option value="duplication">Code Duplication</option>
+        </select>
+      </label>
+    </header>
+
+    <main id="viz" class="flex-1 overflow-auto"></main>
+
+    <!-- Tooltip -->
+    <div id="tooltip" class="hidden fixed z-10 pointer-events-none"></div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
