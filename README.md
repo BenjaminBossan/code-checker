@@ -29,3 +29,24 @@ Simply open **`index.html`** in any modern browser (no server needed). Click *Lo
 ![Example](screenshot.png)
 
 _Note: The code was mostly vibe-coded with ChatGPT o3_
+
+## Dev
+
+### Formatting & Linting
+
+```sh
+ruff check .
+ruff format .
+```
+
+### Type checking
+
+```sh
+mypy .
+```
+
+### Functional test
+
+```sh
+python main.py .
+```
