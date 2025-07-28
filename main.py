@@ -20,7 +20,8 @@ Hierarchy:
 Each leaf node contains static metadata such as its source, docstring, statement
 count, cyclomatic complexity, etc.  The program is dependency-free (stdlib only)
 and built with Python ≥3.12 in mind.  It is structured as a reusable core API
-plus a thin CLI wrapper.
+plus a thin CLI wrapper.  Optional duplication metrics and tiny progress bars
+are available via command line flags.
 """
 
 from __future__ import annotations
@@ -37,6 +38,17 @@ from dataclasses import dataclass, field, asdict
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any, Iterable, MutableMapping, Sequence
+
+
+def _print_progress(current: int, total: int, prefix: str = "") -> None:
+    """Print a very small progress bar."""
+    bar_len = 20
+    filled = int(bar_len * current / total)
+    bar = "#" * filled + "-" * (bar_len - filled)
+    msg = f"\r{prefix} [{bar}] {current}/{total}"
+    print(msg, end="", file=sys.stderr)
+    if current == total:
+        print(file=sys.stderr)
 
 
 ####################
@@ -88,7 +100,9 @@ def _token_fingerprint(source: str) -> set[str]:
     return set(sorted(hashes)[:_K])
 
 
-def compute_duplication(all_files: Iterable[CodeNode]) -> None:
+def compute_duplication(
+    all_files: Iterable[CodeNode], *, show_progress: bool = False
+) -> None:
     """Mutates each CodeNode(metrics) in-place, adding a 'duplication' entry."""
     # flatten to a list of leaf nodes
     leaves: list[CodeNode] = []
@@ -111,6 +125,8 @@ def compute_duplication(all_files: Iterable[CodeNode]) -> None:
 
     # naive O(n²) outer loop but with a cheap Jaccard gate
     for i in range(len(leaves)):
+        if show_progress:
+            _print_progress(i + 1, len(leaves), prefix="duplication")
         for j in range(i + 1, len(leaves)):
             if not fps[i] or not fps[j]:
                 continue
@@ -129,6 +145,9 @@ def compute_duplication(all_files: Iterable[CodeNode]) -> None:
                 best_ratio[j], best_idx[j] = ratio, i
 
     # write the result back into metrics
+    if show_progress:
+        _print_progress(len(leaves), len(leaves), prefix="duplication")
+
     for idx, node in enumerate(leaves):
         if best_idx[idx] == -1:
             continue
@@ -505,6 +524,12 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Show the list of files that *would* be analysed and exit.",
     )
+    parser.add_argument(
+        "--duplication",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Compute code duplication metrics (default: enabled)",
+    )
     return parser.parse_args(argv)
 
 
@@ -520,8 +545,13 @@ def main(argv: Sequence[str] | None = None) -> None:  # noqa: N802 – main styl
         return
 
     print(f"Analysing {len(tasks)} files…", file=sys.stderr)
-    file_nodes = [analyse_file(t) for t in tasks]
-    compute_duplication(file_nodes)
+    file_nodes: list[CodeNode] = []
+    for idx, t in enumerate(tasks, 1):
+        file_nodes.append(analyse_file(t))
+        _print_progress(idx, len(tasks), prefix="analyse")
+
+    if args.duplication:
+        compute_duplication(file_nodes, show_progress=True)
     tree = prune_tree(build_tree(file_nodes))
 
     output_path = Path(args.output)

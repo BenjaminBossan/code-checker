@@ -14,9 +14,12 @@ python main.py src/ tests/ -o report.json
 
 # Dry-run (shows which .py files will be parsed)
 python main.py src/ --dry-run
+
+# Skip the (slow) duplication analysis
+python main.py src/ --no-duplication
 ```
 
-The command walks every given path recursively, analyses each `.py` file and writes a report (default: `result.json`).
+The command walks every given path recursively, analyses each `.py` file and writes a report (default: `result.json`). Simple progress bars show the current file or duplication analysis step.
 
 ### Open the web viewer
 
