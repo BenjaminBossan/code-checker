@@ -192,6 +192,7 @@ class Metrics:
     expression_statements: int
     cyclomatic_complexity: int
     parameters: int
+    type_coverage: float
     duplication: Duplication | None = None
 
 
@@ -331,6 +332,26 @@ def _analyse_function(
     end = end if end is not None else start + 1
     text = "".join(source_lines[start - 1 : end])
     fp = _token_fingerprint(text)
+    total_args = (
+        len(func.args.args)
+        + len(func.args.posonlyargs)
+        + len(func.args.kwonlyargs)
+        + (1 if func.args.vararg else 0)
+        + (1 if func.args.kwarg else 0)
+    )
+    annotated_args = (
+        sum(1 for a in func.args.args if a.annotation is not None)
+        + sum(1 for a in func.args.posonlyargs if a.annotation is not None)
+        + sum(1 for a in func.args.kwonlyargs if a.annotation is not None)
+        + (1 if func.args.vararg and func.args.vararg.annotation is not None else 0)
+        + (1 if func.args.kwarg and func.args.kwarg.annotation is not None else 0)
+    )
+    if kind == "method" and func.args.args and func.args.args[0].arg == "self":
+        total_args -= 1
+        if func.args.args[0].annotation is not None:
+            annotated_args -= 1
+    return_ann = 1 if func.returns is not None else 0
+    type_cov = (annotated_args + return_ann) / (total_args + 1)
     metrics = Metrics(
         lines=end - start + 1,
         statements=visitor.stmt_count,
@@ -340,6 +361,7 @@ def _analyse_function(
         parameters=(
             len(func.args.args) + len(func.args.posonlyargs) + len(func.args.kwonlyargs)
         ),
+        type_coverage=round(type_cov, 3),
     )
 
     return CodeNode(
