@@ -46,6 +46,15 @@ resetZoom.addEventListener("click", () => {
     .call(zoomBehaviour.transform, d3.zoomIdentity);
 });
 
+// Close detail pane when clicking anywhere outside of it
+document.addEventListener("click", (e) => {
+  if (!detailPane) return;
+  if (detailPane.contains(e.target)) return;
+  if (e.target.closest("#viz g")) return;
+  detailPane.remove();
+  detailPane = null;
+});
+
 /*******************************************************************
  * Helpers
  *******************************************************************/
