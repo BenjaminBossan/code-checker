@@ -32,6 +32,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import tokenize
 import sys
 from dataclasses import dataclass, field, asdict
@@ -98,6 +99,18 @@ def _token_fingerprint(source: str) -> set[str]:
         hashes.append(hashlib.md5(window.encode()).hexdigest())
 
     return set(sorted(hashes)[:_K])
+
+
+_TODO_RE = re.compile(r"\b(?:TODO|FIXME|XXX)\b", re.IGNORECASE)
+
+
+def _count_todo_comments(source: str) -> int:
+    """Return how many TODO-like comments appear in the source."""
+    count = 0
+    for tok in tokenize.generate_tokens(io.StringIO(source).readline):
+        if tok.type == tokenize.COMMENT and _TODO_RE.search(tok.string):
+            count += 1
+    return count
 
 
 def compute_duplication(
@@ -193,6 +206,7 @@ class Metrics:
     cyclomatic_complexity: int
     parameters: int
     type_coverage: float
+    todo_comments: int
     duplication: Duplication | None = None
 
 
@@ -331,6 +345,7 @@ def _analyse_function(
     start, end = func.lineno, func.end_lineno  # Python 3.8+
     end = end if end is not None else start + 1
     text = "".join(source_lines[start - 1 : end])
+    todo_count = _count_todo_comments(text)
     fp = _token_fingerprint(text)
     total_args = (
         len(func.args.args)
@@ -362,6 +377,7 @@ def _analyse_function(
             len(func.args.args) + len(func.args.posonlyargs) + len(func.args.kwonlyargs)
         ),
         type_coverage=round(type_cov, 3),
+        todo_comments=todo_count,
     )
 
     return CodeNode(
