@@ -188,11 +188,13 @@ function showDetail(d) {
 
   /* ---------- build metrics table, flattening duplication ---------- */
   const rows = [];
-  for (const [k, v] of Object.entries(metrics)) {
+  const ordered = Object.entries(metrics).sort(([a], [b]) => a.localeCompare(b));
+  for (const [k, v] of ordered) {
+    const label = k.replace(/_/g, " ");
     if (k === "duplication") {
       rows.push(`<tr><td class="key">duplication</td><td>${v?.score ?? 0} ${v?.other ? `<small>→ ${v.other}</small>` : ""}</td></tr>`);
     } else {
-      rows.push(`<tr><td class="key">${k}</td><td>${v}</td></tr>`);
+      rows.push(`<tr><td class="key">${label}</td><td>${v}</td></tr>`);
     }
   }
 

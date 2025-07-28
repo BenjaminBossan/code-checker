@@ -26,7 +26,7 @@ The command walks every given path recursively, analyses each `.py` file and wri
 Simply open **`index.html`** in any modern browser (no server needed). Click *Load JSON* and select the file you just generated.
 
 * Treemap tiles are sized by *log(lines)*.
-* Colour by any metric – complexity, expressions, statements, lines, code duplication.
+* Colour by any metric – complexity, expressions, statements, lines, type coverage, code duplication.
 * Hover for a quick tooltip, click for full source code
 
 ![Example](screenshot.png)
