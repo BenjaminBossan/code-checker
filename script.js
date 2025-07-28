@@ -8,10 +8,15 @@ const fileInput    = document.getElementById("fileInput");
 const metricSelect = document.getElementById("metricSelect");
 const viz          = document.getElementById("viz");
 const tooltip      = document.getElementById("tooltip");
+const resetZoom    = document.getElementById("resetZoom");
 let detailPane = null;
 let hljsReady  = false;
 let rootData   = null;
 let currentMetric = metricSelect.value;
+let currentScale = 1;
+let offsetX = 0;
+let offsetY = 0;
+let zoomBehaviour = null;
 
 /*******************************************************************
  * File loading & basic events
@@ -30,6 +35,16 @@ fileInput.addEventListener("change", (e) => {
 });
 metricSelect.addEventListener("change", () => { currentMetric = metricSelect.value; rootData && draw(); });
 window.addEventListener("resize", () => rootData && draw());
+resetZoom.addEventListener("click", () => {
+  if (!zoomBehaviour) return;
+  currentScale = 1;
+  offsetX = 0;
+  offsetY = 0;
+  d3.select(viz).select("svg")
+    .transition()
+    .duration(200)
+    .call(zoomBehaviour.transform, d3.zoomIdentity);
+});
 
 /*******************************************************************
  * Helpers
@@ -88,8 +103,9 @@ function draw() {
   const color = d3.scaleSequential(d3.interpolateViridis).domain(d3.extent(metricVals));
 
   const svg = d3.select(viz).append("svg").attr("width", width).attr("height", height);
+  const zoomRoot = svg.append("g");
 
-  const node = svg.selectAll("g").data(root.leaves()).enter().append("g")
+  const node = zoomRoot.selectAll("g").data(root.leaves()).enter().append("g")
     .attr("transform", d => `translate(${d.x0},${d.y0})`)
     .on("click",      (e, d) => showDetail(d))
     .on("mousemove",  (e, d) => showTooltip(e, d))
@@ -108,29 +124,41 @@ function draw() {
     const boxW = d.x1 - d.x0, boxH = d.y1 - d.y0;
     const name = fullName(d);
 
-    // dynamic font size in 8–12 px range
     const fs = Math.max(10, Math.min(12, Math.min(boxW / name.length * 1.6, boxH * 0.6)));
 
-    // break into chunks that fit the width
     const charsPerLine = Math.max(1, Math.floor(boxW / (fs * 0.55)));
     const lines = [];
-    for (let i = 0; i < name.length; i += charsPerLine) { lines.push(name.slice(i, i + charsPerLine)); }
+    for (let i = 0; i < name.length; i += charsPerLine) lines.push(name.slice(i, i + charsPerLine));
 
     sel.attr("x", 2).attr("y", fs + 2).style("font-size", fs + "px");
     sel.selectAll("tspan").remove();
-    lines.forEach((line, i) => {
-      sel.append("tspan").attr("x", 2).attr("y", fs + 2 + i * fs).text(line);
-    });
+    lines.forEach((line, i) => sel.append("tspan").attr("x", 2).attr("y", fs + 2 + i * fs).text(line));
 
-    // Contrast handling
     const bg = d3.color(d3.select(this.parentNode).select("rect").attr("fill"));
     const lum = 0.2126 * (bg.r / 255) ** 2.2 + 0.7152 * (bg.g / 255) ** 2.2 + 0.0722 * (bg.b / 255) ** 2.2;
     sel.attr("fill", lum > 0.5 ? "#000" : "#fff");
 
-    // hide if block taller than box
     const blockHeight = lines.length * fs + 2;
-    sel.style("opacity", (boxW > 20 && boxH > blockHeight) ? 1 : 0);
+    sel.style("opacity", boxW > 20 && boxH > blockHeight ? 1 : 0);
+
+    sel.attr("data-font-size", fs).attr("data-lines", lines.length);
   });
+
+  zoomBehaviour = d3
+    .zoom()
+    .scaleExtent([0.2, 4])
+    .on("zoom", (e) => {
+      const t = e.transform;
+      currentScale = t.k;
+      offsetX = t.x;
+      offsetY = t.y;
+      zoomRoot.attr("transform", t);
+      resetZoom.classList.toggle("hidden", currentScale === 1);
+      updateLabels();
+    });
+
+  svg.call(zoomBehaviour);
+  applyZoom();
 }
 
 /*******************************************************************
@@ -186,4 +214,42 @@ function escapeHtml(str) {
   return str.replace(/[&<>"']/g, c => (
     { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c]
   ));
+}
+
+function applyZoom() {
+  const g = viz.querySelector("svg g");
+  if (!g) return;
+  g.setAttribute(
+    "transform",
+    `translate(${offsetX},${offsetY}) scale(${currentScale})`
+  );
+  resetZoom.classList.toggle("hidden", currentScale === 1);
+  updateLabels();
+}
+
+function updateLabels() {
+  d3.select(viz)
+    .selectAll("svg g g")
+    .each(function (d) {
+      const textSel = d3.select(this).select("text");
+      if (textSel.empty()) return;
+      const baseFs = parseFloat(textSel.attr("data-font-size")) || 10;
+
+    const fs = baseFs / currentScale;
+    const boxW = (d.x1 - d.x0) * currentScale;
+    const boxH = (d.y1 - d.y0) * currentScale;
+
+    const charsPerLine = Math.max(1, Math.floor(boxW / (baseFs * 0.55)));
+    const name = fullName(d);
+    const lines = [];
+    for (let i = 0; i < name.length; i += charsPerLine) lines.push(name.slice(i, i + charsPerLine));
+
+    textSel.attr("x", 2).attr("y", fs + 2).style("font-size", fs + "px");
+    textSel.selectAll("tspan").remove();
+    lines.forEach((line, i) => textSel.append("tspan").attr("x", 2).attr("y", fs + 2 + i * fs).text(line));
+
+    textSel.attr("data-lines", lines.length);
+    const blockHeight = lines.length * fs + 2;
+    textSel.style("opacity", boxW > 20 && boxH > blockHeight ? 1 : 0);
+  });
 }
