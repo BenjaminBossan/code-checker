@@ -193,7 +193,7 @@ document.addEventListener("mousemove", e => !tooltip.classList.contains("hidden"
  *******************************************************************/
 function showDetail(d) {
   ensurePane(); injectHighlightJs();
-  const { metrics = {}, source, path } = d.data;
+  const { metrics = {}, source, path, lineno } = d.data;
 
   /* ---------- build metrics table, flattening duplication ---------- */
   const rows = [];
@@ -213,9 +213,27 @@ function showDetail(d) {
       <button id="closePane" style="font-size:1.25rem;border:none;background:none;cursor:pointer">&times;</button>
     </div>
     <p style="margin:0 0 .5rem 0;font-size:.8rem;color:#555">${path || ""}</p>
+    <div style="font-size:.8rem;margin-bottom:.5rem">
+      <label for="editorSelect">Open in:</label>
+      <span class="help" title="Opens the file at the selected line using your editor's URI scheme">?</span>
+      <select id="editorSelect" style="margin-left:.25rem">
+        <option value="">— choose —</option>
+        <option value="emacs://open?file={path}&line={line}">Emacs</option>
+        <option value="vim://open?url=file://{path}&line={line}">Vim</option>
+        <option value="nvim://open?url=file://{path}&line={line}">Neovim</option>
+        <option value="subl://open?url=file://{path}&line={line}">Sublime</option>
+        <option value="atom://core/open/file?filename={path}&line={line}">Atom</option>
+        <option value="gedit://open?filename={path}&line={line}">Gedit</option>
+      </select>
+    </div>
     <table style="font-size:.8rem;margin-bottom:.75rem">${rows.join("")}</table>
     ${source ? `<pre><code class="language-python">${escapeHtml(source)}</code></pre>` : "<p>No source</p>"}`;
   document.getElementById("closePane").onclick = () => { detailPane.remove(); detailPane = null; };
+
+  const editorSel = document.getElementById("editorSelect");
+  if (editorSel) {
+    editorSel.onchange = () => openInEditor(editorSel.value, path, lineno || 1);
+  }
 
   if (hljsReady) window.hljs.highlightAll();
   else document.addEventListener("hljs-ready", () => window.hljs.highlightAll(), { once: true });
@@ -225,6 +243,14 @@ function escapeHtml(str) {
   return str.replace(/[&<>"']/g, c => (
     { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c]
   ));
+}
+
+function openInEditor(template, filePath, line) {
+  if (!template) return;
+  const url = template
+    .replace('{path}', encodeURIComponent(filePath))
+    .replace('{line}', line);
+  window.location.href = url;
 }
 
 function applyZoom() {

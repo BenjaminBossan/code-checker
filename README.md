@@ -28,6 +28,7 @@ Simply open **`index.html`** in any modern browser (no server needed). Click *Lo
 * Treemap tiles are sized by *log(lines)*.
 * Colour by any metric – complexity, expressions, statements, lines, type coverage, code duplication.
 * Hover for a quick tooltip, click for full source code
+* Open the selected file at the right line in your editor via the detail pane (hover the question mark for details)
 
 ![Example](screenshot.png)
 

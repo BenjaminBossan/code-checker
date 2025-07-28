@@ -45,6 +45,13 @@ html, body {
 
 .hidden { display: none; }
 
+.help {
+  cursor: help;
+  color: #555;
+  margin-left: 0.25rem;
+  font-weight: bold;
+}
+
 #resetZoom {
   cursor: pointer;
   background: #f5f5f5;
