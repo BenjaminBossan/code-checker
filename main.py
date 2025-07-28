@@ -36,7 +36,7 @@ import sys
 from dataclasses import dataclass, field, asdict
 from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Any, Iterable, Mapping, MutableMapping, Sequence
+from typing import Any, Iterable, MutableMapping, Sequence
 
 
 ####################
@@ -121,7 +121,8 @@ def compute_duplication(all_files: Iterable[CodeNode]) -> None:
             if jacc < _JACCARD_MIN:
                 continue
             # expensive difflib only on likely matches
-            ratio = SequenceMatcher(None, leaves[i].source, leaves[j].source).ratio()
+            seq_matcher = SequenceMatcher(None, leaves[i].source, leaves[j].source)
+            ratio = seq_matcher.ratio()
             if ratio > best_ratio[i]:
                 best_ratio[i], best_idx[i] = ratio, j
             if ratio > best_ratio[j]:
@@ -131,17 +132,19 @@ def compute_duplication(all_files: Iterable[CodeNode]) -> None:
     for idx, node in enumerate(leaves):
         if best_idx[idx] == -1:
             continue
+
         other = leaves[best_idx[idx]]
-        node.metrics["duplication"] = {
-            "score": round(best_ratio[idx], 3),
-            "other": other.qualname or other.name,
-            "lines_other": other.metrics["lines"],
-        }
+        assert node.metrics, "at this point, node.metrics has to exist"
+        node.metrics.duplication = Duplication(
+            score=round(best_ratio[idx], 3),
+            other=other.qualname or other.name,
+            lines_other=other.metrics.lines if other.metrics else 0,
+        )
 
 
-###############################################################################
-# Data structures
-###############################################################################
+###################
+# Data structures #
+###################
 
 
 @dataclass
@@ -156,26 +159,41 @@ class FileTask:
 
 
 @dataclass
+class Duplication:
+    score: float
+    other: str
+    lines_other: int
+
+
+@dataclass
+class Metrics:
+    lines: int
+    statements: int
+    expressions: int
+    expression_statements: int
+    cyclomatic_complexity: int
+    parameters: int
+    duplication: Duplication | None = None
+
+
+@dataclass
 class CodeNode:
     """Generic tree node used for JSON serialisation."""
 
     name: str
     nodetype: str  # directory | file | class | function | method
-    path: str | None = None  # absolute path for files & below
-    qualname: str | None = None
+    path: str  # absolute path for files & below
+    qualname: str = ""
     lineno: int | None = None
     end_lineno: int | None = None
-    docstring: str | None = None
-    metrics: Mapping[str, int] | None = None
-    source: str | None = None  # raw text (functions & methods only)
+    docstring: str = ""
+    metrics: Metrics | None = None
+    source: str = ""
     children: list["CodeNode"] = field(default_factory=list)
     _fingerprint: set[str] = field(
         default_factory=set, repr=False, compare=False, metadata={"serialize": False}
     )
 
-    # ------------------------------------------------------------------
-    # Serialisation helpers
-    # ------------------------------------------------------------------
     def _clean(self, d):
         if isinstance(d, (int, float, str, type(None))):
             return d
@@ -197,9 +215,6 @@ class CodeNode:
         cleaned = self._clean(raw)
         return cleaned
 
-    # ------------------------------------------------------------------
-    # Convenience predicates
-    # ------------------------------------------------------------------
     @property
     def is_directory(self) -> bool:  # noqa: D401 – simple property
         return self.nodetype == "directory"
@@ -209,9 +224,9 @@ class CodeNode:
         return any(ch.nodetype == "file" for ch in self.children)
 
 
-###############################################################################
-# AST helpers
-###############################################################################
+###############
+# AST helpers #
+###############
 
 
 class _MetricVisitor(ast.NodeVisitor):
@@ -255,9 +270,6 @@ class _MetricVisitor(ast.NodeVisitor):
         self.top_expr_stmts = 0
         self.decision_points = 0
 
-    # ---------------------------------------------------------------
-    # Visitor call
-    # ---------------------------------------------------------------
     def generic_visit(self, node: ast.AST) -> None:
         if isinstance(node, self.STMTS):
             self.stmt_count += 1
@@ -269,9 +281,6 @@ class _MetricVisitor(ast.NodeVisitor):
             self.expr_count += 1
         super().generic_visit(node)
 
-    # ---------------------------------------------------------------
-    # Derived metrics
-    # ---------------------------------------------------------------
     @property
     def cyclomatic_complexity(self) -> int:  # noqa: D401 – simple property
         """McCabe's complexity number (≈ decisions + 1)."""
@@ -282,9 +291,9 @@ class _MetricVisitor(ast.NodeVisitor):
         return self.top_expr_stmts
 
 
-###############################################################################
-# Core analysis logic
-###############################################################################
+#######################
+# Core analysis logic #
+#######################
 
 
 def _analyse_function(
@@ -300,19 +309,19 @@ def _analyse_function(
     visitor.visit(func)
 
     start, end = func.lineno, func.end_lineno  # Python 3.8+
+    end = end if end is not None else start + 1
     text = "".join(source_lines[start - 1 : end])
     fp = _token_fingerprint(text)
-
-    metrics = {
-        "lines": end - start + 1,
-        "statements": visitor.stmt_count,
-        "expressions": visitor.expr_count,
-        "expression_statements": visitor.expression_statements,
-        "cyclomatic_complexity": visitor.cyclomatic_complexity,
-        "parameters": len(func.args.args)
-        + len(func.args.posonlyargs)
-        + len(func.args.kwonlyargs),
-    }
+    metrics = Metrics(
+        lines=end - start + 1,
+        statements=visitor.stmt_count,
+        expressions=visitor.expr_count,
+        expression_statements=visitor.expression_statements,
+        cyclomatic_complexity=visitor.cyclomatic_complexity,
+        parameters=(
+            len(func.args.args) + len(func.args.posonlyargs) + len(func.args.kwonlyargs)
+        ),
+    )
 
     return CodeNode(
         name=func.name,
@@ -321,7 +330,7 @@ def _analyse_function(
         path=str(file_path),
         lineno=start,
         end_lineno=end,
-        docstring=ast.get_docstring(func),
+        docstring=ast.get_docstring(func) or "",
         source=text,
         metrics=metrics,
         _fingerprint=fp,  # leading _ => not serialized
@@ -351,7 +360,7 @@ def _analyse_class(
         path=str(file_path),
         lineno=cls.lineno,
         end_lineno=cls.end_lineno,
-        docstring=ast.get_docstring(cls),
+        docstring=ast.get_docstring(cls) or "",
         children=children,
     )
 
@@ -379,9 +388,9 @@ def analyse_file(task: FileTask) -> CodeNode:
     )
 
 
-###############################################################################
-# Tree building helpers
-###############################################################################
+#########################
+# Tree building helpers #
+#########################
 
 
 def build_tree(file_nodes: Iterable[CodeNode]) -> CodeNode:
@@ -390,8 +399,8 @@ def build_tree(file_nodes: Iterable[CodeNode]) -> CodeNode:
     The tree always has a synthetic top node named `root`.  Use
     :func:`prune_tree` afterwards to strip superfluous outer layers.
     """
-
-    root = CodeNode(name="root", nodetype="directory", path=None)
+    # for the root, just set a dummy path, it doesn't matter
+    root = CodeNode(name="root", nodetype="directory", path=os.getcwd())
     lookup: MutableMapping[Path, CodeNode] = {Path(): root}
 
     for fnode in file_nodes:
@@ -435,9 +444,9 @@ def prune_tree(node: CodeNode) -> CodeNode:
     return current
 
 
-###############################################################################
-# Task collection
-###############################################################################
+###################
+# Task collection #
+###################
 
 
 def gather_tasks(paths: Sequence[str]) -> list[FileTask]:
@@ -470,9 +479,9 @@ def gather_tasks(paths: Sequence[str]) -> list[FileTask]:
     return tasks
 
 
-###############################################################################
-# CLI
-###############################################################################
+#######
+# CLI #
+#######
 
 
 def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -522,10 +531,6 @@ def main(argv: Sequence[str] | None = None) -> None:  # noqa: N802 – main styl
     )
     print(f"→ JSON written to {output_path}")
 
-
-###############################################################################
-# Entrypoint
-###############################################################################
 
 if __name__ == "__main__":
     main()
