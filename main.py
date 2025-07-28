@@ -22,6 +22,7 @@ count, cyclomatic complexity, etc.  The program is dependency-free (stdlib only)
 and built with Python ≥3.12 in mind.  It is structured as a reusable core API
 plus a thin CLI wrapper.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -42,9 +43,10 @@ from typing import Any, Iterable, Mapping, MutableMapping, Sequence
 # Code duplication #
 ####################
 
-_W = 5          # n-gram width  (5-token shingles)
-_K = 50         # how many hashes we keep (winnowing window size)
+_W = 5  # n-gram width  (5-token shingles)
+_K = 50  # how many hashes we keep (winnowing window size)
 _MIN_TOKS = 25  # minimum tokens for consideration for code duplication
+_JACCARD_MIN = 0.3  # minimum IoU for similarity computation, optimization
 
 
 def _token_fingerprint(source: str) -> set[str]:
@@ -58,8 +60,13 @@ def _token_fingerprint(source: str) -> set[str]:
     toks: list[str] = []
     for tok in tokenize.generate_tokens(io.StringIO(source).readline):
         # Skip indentation / newlines / comments
-        if tok.type in (tokenize.INDENT, tokenize.DEDENT,
-                        tokenize.NEWLINE, tokenize.NL, tokenize.COMMENT):
+        if tok.type in (
+            tokenize.INDENT,
+            tokenize.DEDENT,
+            tokenize.NEWLINE,
+            tokenize.NL,
+            tokenize.COMMENT,
+        ):
             continue
         s = tok.string
         # Canonicalise literals so "42" and "99" look the same
@@ -78,19 +85,21 @@ def _token_fingerprint(source: str) -> set[str]:
         window = " ".join(toks[i : i + _W])
         hashes.append(hashlib.md5(window.encode()).hexdigest())
 
-    return set(sorted(hashes)[: _K])
+    return set(sorted(hashes)[:_K])
 
 
 def compute_duplication(all_files: Iterable[CodeNode]) -> None:
     """Mutates each CodeNode(metrics) in-place, adding a 'duplication' entry."""
     # flatten to a list of leaf nodes
     leaves: list[CodeNode] = []
+
     def _walk(node: CodeNode):
         if not node.children:
             leaves.append(node)
         else:
             for c in node.children:
                 _walk(c)
+
     for f in all_files:
         _walk(f)
 
@@ -98,7 +107,7 @@ def compute_duplication(all_files: Iterable[CodeNode]) -> None:
     fps = [getattr(n, "_fingerprint") for n in leaves]
 
     best_ratio = [0.0] * len(leaves)
-    best_idx   = [-1]  * len(leaves)
+    best_idx = [-1] * len(leaves)
 
     # naive O(n²) outer loop but with a cheap Jaccard gate
     for i in range(len(leaves)):
@@ -108,8 +117,8 @@ def compute_duplication(all_files: Iterable[CodeNode]) -> None:
 
             inter = len(fps[i] & fps[j])
             union = len(fps[i] | fps[j])
-            jacc  = inter / union if union else 0.0
-            if jacc < 0.3:           # <- adjustable threshold
+            jacc = inter / union if union else 0.0
+            if jacc < _JACCARD_MIN:
                 continue
             # expensive difflib only on likely matches
             ratio = SequenceMatcher(None, leaves[i].source, leaves[j].source).ratio()
@@ -133,6 +142,7 @@ def compute_duplication(all_files: Iterable[CodeNode]) -> None:
 ###############################################################################
 # Data structures
 ###############################################################################
+
 
 @dataclass
 class FileTask:
@@ -159,7 +169,9 @@ class CodeNode:
     metrics: Mapping[str, int] | None = None
     source: str | None = None  # raw text (functions & methods only)
     children: list["CodeNode"] = field(default_factory=list)
-    _fingerprint: set[str] = field(default_factory=set, repr=False, compare=False, metadata={"serialize": False})
+    _fingerprint: set[str] = field(
+        default_factory=set, repr=False, compare=False, metadata={"serialize": False}
+    )
 
     # ------------------------------------------------------------------
     # Serialisation helpers
@@ -200,6 +212,7 @@ class CodeNode:
 ###############################################################################
 # AST helpers
 ###############################################################################
+
 
 class _MetricVisitor(ast.NodeVisitor):
     """Collect basic metrics for complexity & size (no external deps)."""
@@ -273,6 +286,7 @@ class _MetricVisitor(ast.NodeVisitor):
 # Core analysis logic
 ###############################################################################
 
+
 def _analyse_function(
     func: ast.FunctionDef | ast.AsyncFunctionDef,
     source_lines: Sequence[str],
@@ -325,7 +339,11 @@ def _analyse_class(
     for item in cls.body:
         if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
             # Ignore *nested* functions inside methods – they'll be included in metrics only
-            children.append(_analyse_function(item, source_lines, file_path, kind="method", parent=cls.name))
+            children.append(
+                _analyse_function(
+                    item, source_lines, file_path, kind="method", parent=cls.name
+                )
+            )
 
     return CodeNode(
         name=cls.name,
@@ -364,6 +382,7 @@ def analyse_file(task: FileTask) -> CodeNode:
 ###############################################################################
 # Tree building helpers
 ###############################################################################
+
 
 def build_tree(file_nodes: Iterable[CodeNode]) -> CodeNode:
     """Assemble a *directory* tree from analysed file nodes.
@@ -420,6 +439,7 @@ def prune_tree(node: CodeNode) -> CodeNode:
 # Task collection
 ###############################################################################
 
+
 def gather_tasks(paths: Sequence[str]) -> list[FileTask]:
     """Expand the given paths into a list of `FileTask`s (recursively)."""
 
@@ -443,7 +463,9 @@ def gather_tasks(paths: Sequence[str]) -> list[FileTask]:
             tasks.append(FileTask(p))
             seen.add(p)
         else:
-            print(f"warning: {p!s} is neither a directory nor a .py file", file=sys.stderr)
+            print(
+                f"warning: {p!s} is neither a directory nor a .py file", file=sys.stderr
+            )
 
     return tasks
 
@@ -451,6 +473,7 @@ def gather_tasks(paths: Sequence[str]) -> list[FileTask]:
 ###############################################################################
 # CLI
 ###############################################################################
+
 
 def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
