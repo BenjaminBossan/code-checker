@@ -9,6 +9,7 @@ const metricSelect = document.getElementById("metricSelect");
 const viz          = document.getElementById("viz");
 const tooltip      = document.getElementById("tooltip");
 const resetZoom    = document.getElementById("resetZoom");
+const summary      = document.getElementById("summary");
 let detailPane = null;
 let hljsReady  = false;
 let rootData   = null;
@@ -96,6 +97,116 @@ function ensurePane() {
 }
 
 /*******************************************************************
+ * Summary statistics
+ *******************************************************************/
+function updateSummary(root) {
+  const counts = { files: 0, classes: 0, functions: 0 };
+  root.each((d) => {
+    const t = d.data.nodetype;
+    if (t === "file") counts.files++;
+    else if (t === "class") counts.classes++;
+    else if (t === "function" || t === "method") counts.functions++;
+  });
+
+  const leaves = root.leaves();
+  const items = [];
+
+  if (currentMetric === "expressions") {
+    const total = d3.sum(leaves, (d) => d.data.metrics?.expressions || 0);
+    const avg = d3.mean(leaves, (d) => d.data.metrics?.expressions || 0) ?? 0;
+    items.push(`Total expressions: ${total.toLocaleString()}`);
+    items.push(`Average expressions per function: ${avg.toFixed(1)}`);
+  } else if (currentMetric === "lines") {
+    const vals = leaves.map((d) => d.data.metrics?.lines ?? 0).sort(d3.ascending);
+    const min = Math.round(vals[0] ?? 0);
+    const max = Math.round(vals[vals.length - 1] ?? 0);
+    const avg = d3.mean(vals) ?? 0;
+    const median = Math.round(d3.quantileSorted(vals, 0.5) ?? 0);
+    const p90 = Math.round(d3.quantileSorted(vals, 0.9) ?? 0);
+    items.push(`Shortest function: ${min} lines`);
+    items.push(`Longest function: ${max} lines`);
+    items.push(`Average function length: ${avg.toFixed(1)} lines`);
+    items.push(`Median function length: ${median} lines`);
+    items.push(`90th percentile length: ${p90} lines`);
+  } else if (currentMetric === "duplication") {
+    const scores = leaves.map((d) => d.data.metrics?.duplication?.score ?? 0);
+    const sorted = scores.slice().sort(d3.ascending);
+    const avg = d3.mean(scores) ?? 0;
+    const median = d3.quantileSorted(sorted, 0.5) ?? 0;
+    const p90 = d3.quantileSorted(sorted, 0.9) ?? 0;
+    const totalLines = d3.sum(leaves, (d) => d.data.metrics?.lines || 0);
+    const dupLines = d3.sum(
+      leaves,
+      (d) => (d.data.metrics?.lines || 0) * (d.data.metrics?.duplication?.score ?? 0),
+    );
+    const prop = totalLines ? dupLines / totalLines : 0;
+    items.push(`Average duplication score: ${avg.toFixed(2)}`);
+    items.push(`Median duplication score: ${median.toFixed(2)}`);
+    items.push(`90th percentile score: ${p90.toFixed(2)}`);
+    items.push(`Duplicated lines: ${Math.round(dupLines)} (${(prop * 100).toFixed(1)}%)`);
+  } else if (currentMetric === "type_coverage") {
+    const vals = leaves
+      .map((d) => d.data.metrics?.type_coverage)
+      .filter((v) => v != null)
+      .sort(d3.ascending);
+    if (vals.length) {
+      const avg = d3.mean(vals) ?? 0;
+      const median = d3.quantileSorted(vals, 0.5) ?? 0;
+      const p90 = d3.quantileSorted(vals, 0.9) ?? 0;
+      const full = vals.filter((v) => v === 1).length;
+      items.push(`Average coverage: ${(avg * 100).toFixed(1)}%`);
+      items.push(`Median coverage: ${(median * 100).toFixed(1)}%`);
+      items.push(`90th percentile coverage: ${(p90 * 100).toFixed(1)}%`);
+      items.push(
+        `Fully typed functions: ${full} (${((full / vals.length) * 100).toFixed(1)}%)`,
+      );
+    }
+  } else if (currentMetric === "todo_comments") {
+    const vals = leaves.map((d) => d.data.metrics?.todo_comments || 0);
+    const total = d3.sum(vals);
+    const withTodos = vals.filter((v) => v > 0).length;
+    const max = d3.max(vals) ?? 0;
+    items.push(`Total TODO comments: ${total}`);
+    items.push(
+      `Functions with TODOs: ${withTodos} (${((withTodos / leaves.length) * 100).toFixed(1)}%)`,
+    );
+    items.push(`Most TODOs in a function: ${max}`);
+  } else {
+    const vals = leaves
+      .map((d) => d.data.metrics?.[currentMetric])
+      .filter((v) => v != null)
+      .sort(d3.ascending);
+    if (vals.length) {
+      const min = Math.round(vals[0] ?? 0);
+      const max = Math.round(vals[vals.length - 1] ?? 0);
+      const avg = d3.mean(vals) ?? 0;
+      const median = Math.round(d3.quantileSorted(vals, 0.5) ?? 0);
+      const p90 = Math.round(d3.quantileSorted(vals, 0.9) ?? 0);
+      const total = Math.round(d3.sum(vals) ?? 0);
+      const label = currentMetric.replace(/_/g, " ");
+      items.push(`Minimum ${label}: ${min}`);
+      items.push(`Maximum ${label}: ${max}`);
+      items.push(`Average ${label}: ${avg.toFixed(1)}`);
+      items.push(`Median ${label}: ${median}`);
+      items.push(`90th percentile ${label}: ${p90}`);
+      items.push(`Total ${label}: ${total}`);
+    }
+  }
+
+  const metricHTML =
+    items.length > 0 ? `<ul>${items.map((t) => `<li>${t}</li>`).join("")}</ul>` : "";
+
+  summary.innerHTML = `
+    <div class="general">
+      <div><strong>Files</strong>: ${counts.files}</div>
+      <div><strong>Classes</strong>: ${counts.classes}</div>
+      <div><strong>Functions</strong>: ${counts.functions}</div>
+    </div>
+    ${metricHTML}
+  `;
+}
+
+/*******************************************************************
  * Treemap draw
  *******************************************************************/
 function draw() {
@@ -107,6 +218,8 @@ function draw() {
     .sum((d) => d.metrics ? Math.log10((d.metrics.lines || 1) + 1) : 0)
     .sort((a, b) => b.value - a.value);
   d3.treemap().size([width, height]).padding(1)(root);
+
+  updateSummary(root);
 
   const metricVals = root.leaves().map(metricValue);
   const color = d3.scaleSequential(d3.interpolateViridis).domain(d3.extent(metricVals));

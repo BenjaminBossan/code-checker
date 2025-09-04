@@ -29,6 +29,7 @@ Simply open **`index.html`** in any modern browser (no server needed). Click *Lo
 * Colour by any metric – complexity, expressions, statements, lines, type coverage, code duplication.
 * Hover for a quick tooltip, click for full source code
 * Open the selected file at the right line in your editor via the detail pane (hover the question mark for details)
+* Summary statistics above the treemap show general counts and metric-specific insights
 
 ![Example](screenshot.png)
 

@@ -8,6 +8,35 @@ html, body {
   position: relative;
 }
 
+#summary {
+  font-size: 0.875rem;
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-left: 1rem;
+}
+
+#summary .general {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+#summary .general div {
+  white-space: nowrap;
+}
+
+#summary ul {
+  list-style: disc;
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+#summary ul li {
+  margin-left: 0.75rem;
+}
+
 /* Treemap rectangles */
 .node {
   position: absolute;

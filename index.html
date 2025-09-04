@@ -9,7 +9,7 @@
     <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
   </head>
   <body class="min-h-screen flex flex-col">
-    <header class="px-4 py-2 shadow-md bg-white flex flex-wrap gap-4 items-center">
+    <header class="px-4 py-2 shadow-md bg-white flex flex-wrap gap-4 items-start">
       <h1 class="text-xl font-semibold grow">Code Metrics Treemap</h1>
       <label class="text-sm font-medium">Load JSON:
         <input id="fileInput" type="file" accept="application/json" class="ml-2" />
@@ -25,6 +25,7 @@
           <option value="todo_comments">TODO comments</option>
         </select>
       </label>
+      <section id="summary"></section>
       <button id="resetZoom" class="text-sm border rounded px-2 py-1 hidden">
         Reset zoom
       </button>
