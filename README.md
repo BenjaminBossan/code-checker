@@ -39,7 +39,7 @@ Below is an example of what you could see in the browser.
 
 ![Example](screenshot.png)
 
-The treemap contains blocks, with each block corresponding to a function/method. Each of these blocks is grouped according to the file/module it is found in. If the name is not visible because the block is too small, place the curser over the block. Use the mouse wheel to zoom in if needed (click "Reset Zoom" on the top left to zoom out again). The colour of the blocks encodes the selected metric, so e.g. for "Expressions", purple means few expressions and yellow means a lot of expressions.
+The treemap contains blocks, with each block corresponding to a function/method. Each of these blocks is grouped according to the file/module it is found in. If the name is not visible because the block is too small, place the curser over the block. Use the mouse wheel to zoom in and drag to pan if needed (click "Reset View" on the top left to return to the default view). The colour of the blocks encodes the selected metric, so e.g. for "Expressions", purple means few expressions and yellow means a lot of expressions.
 
 To show more details, click on a block. This will open a detailed view, including the metrics for this function and the source code. If signficant code duplication was detected, the most similar function will also be mentioned.
 

@@ -8,7 +8,7 @@ const fileInput    = document.getElementById("fileInput");
 const metricSelect = document.getElementById("metricSelect");
 const viz          = document.getElementById("viz");
 const tooltip      = document.getElementById("tooltip");
-const resetZoom    = document.getElementById("resetZoom");
+const resetView    = document.getElementById("resetView");
 const summary      = document.getElementById("summary");
 let detailPane = null;
 let hljsReady  = false;
@@ -37,7 +37,7 @@ fileInput.addEventListener("change", (e) => {
 });
 metricSelect.addEventListener("change", () => { currentMetric = metricSelect.value; rootData && draw(); });
 window.addEventListener("resize", () => rootData && draw());
-resetZoom.addEventListener("click", () => {
+resetView.addEventListener("click", () => {
   if (!zoomBehaviour) return;
   currentScale = 1;
   offsetX = 0;
@@ -290,7 +290,7 @@ function draw() {
       offsetX = t.x;
       offsetY = t.y;
       zoomRoot.attr("transform", t);
-      resetZoom.classList.toggle("hidden", currentScale === 1);
+      resetView.classList.toggle("hidden", currentScale === 1 && offsetX === 0 && offsetY === 0);
       updateLabels();
     });
 
@@ -392,7 +392,10 @@ function applyZoom() {
     "transform",
     `translate(${offsetX},${offsetY}) scale(${currentScale})`
   );
-  resetZoom.classList.toggle("hidden", currentScale === 1);
+  resetView.classList.toggle(
+    "hidden",
+    currentScale === 1 && offsetX === 0 && offsetY === 0
+  );
   updateLabels();
 }
 
