@@ -21,6 +21,8 @@ python main.py src/ --no-duplication
 
 The command walks every given path recursively, analyses each `.py` file and writes a report (default: `result.json`). Simple progress bars show the current file or duplication analysis step.
 
+The package has no third party dependencies.
+
 ### Open the web viewer
 
 Simply open **`index.html`** in any modern browser (no server needed). Click *Load JSON* and select the file you just generated.
@@ -31,11 +33,19 @@ Simply open **`index.html`** in any modern browser (no server needed). Click *Lo
 * Open the selected file at the right line in your editor via the detail pane (hover the question mark for details)
 * Summary statistics above the treemap show general counts and metric-specific insights
 
+### Screenshot
+
+Below is an example of what you could see in the browser.
+
 ![Example](screenshot.png)
 
-_Note: The code was mostly vibe-coded with ChatGPT o3_
+The treemap contains blocks, with each block corresponding to a function/method. Each of these blocks is grouped according to the file/module it is found in. If the name is not visible because the block is too small, place the curser over the block. Use the mouse wheel to zoom in if needed (click "Reset Zoom" on the top left to zoom out again). The colour of the blocks encodes the selected metric, so e.g. for "Expressions", purple means few expressions and yellow means a lot of expressions.
+
+To show more details, click on a block. This will open a detailed view, including the metrics for this function and the source code. If signficant code duplication was detected, the most similar function will also be mentioned.
 
 ## Dev
+
+Note: The code was mostly vibe-coded with ChatGPT o3 and ChatGPT 5.
 
 ### Formatting & Linting
 
