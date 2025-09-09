@@ -41,8 +41,19 @@ html, body {
 .node {
   position: absolute;
   box-shadow: inset 0 0 0 1px rgba(0,0,0,0.05);
-  transition: opacity 0.2s;
+  transition: opacity 0.2s, stroke 0.2s, stroke-width 0.2s;
   overflow: hidden;
+}
+
+.node.selected {
+  stroke: #333;
+  stroke-width: 2;
+  animation: nodeSelect 0.4s ease-out;
+}
+
+@keyframes nodeSelect {
+  from { stroke-width: 8; }
+  to   { stroke-width: 2; }
 }
 
 .node:hover {

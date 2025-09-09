@@ -18,6 +18,7 @@ let currentScale = 1;
 let offsetX = 0;
 let offsetY = 0;
 let zoomBehaviour = null;
+let selectedNode = null;
 
 /*******************************************************************
  * File loading & basic events
@@ -54,6 +55,7 @@ document.addEventListener("click", (e) => {
   if (e.target.closest("#viz g")) return;
   detailPane.remove();
   detailPane = null;
+  clearSelection();
 });
 
 /*******************************************************************
@@ -94,6 +96,19 @@ function ensurePane() {
     padding: "1rem 1.25rem", zIndex: 1000
   });
   document.body.appendChild(detailPane);
+}
+
+function clearSelection() {
+  if (selectedNode) {
+    selectedNode.classList.remove("selected");
+    selectedNode = null;
+  }
+}
+
+function selectBlock(group) {
+  clearSelection();
+  selectedNode = group.querySelector("rect");
+  if (selectedNode) selectedNode.classList.add("selected");
 }
 
 /*******************************************************************
@@ -227,11 +242,11 @@ function draw() {
   const svg = d3.select(viz).append("svg").attr("width", width).attr("height", height);
   const zoomRoot = svg.append("g");
 
-  const node = zoomRoot.selectAll("g").data(root.leaves()).enter().append("g")
-    .attr("transform", d => `translate(${d.x0},${d.y0})`)
-    .on("click",      (e, d) => showDetail(d))
-    .on("mousemove",  (e, d) => showTooltip(e, d))
-    .on("mouseleave", hideTooltip);
+    const node = zoomRoot.selectAll("g").data(root.leaves()).enter().append("g")
+      .attr("transform", d => `translate(${d.x0},${d.y0})`)
+      .on("click", function (e, d) { selectBlock(this); showDetail(d); })
+      .on("mousemove",  (e, d) => showTooltip(e, d))
+      .on("mouseleave", hideTooltip);
 
   node.append("rect")
     .attr("class", "node")
@@ -341,7 +356,11 @@ function showDetail(d) {
     </div>
     <table style="font-size:.8rem;margin-bottom:.75rem">${rows.join("")}</table>
     ${source ? `<pre><code class="language-python">${escapeHtml(source)}</code></pre>` : "<p>No source</p>"}`;
-  document.getElementById("closePane").onclick = () => { detailPane.remove(); detailPane = null; };
+  document.getElementById("closePane").onclick = () => {
+    detailPane.remove();
+    detailPane = null;
+    clearSelection();
+  };
 
   const editorSel = document.getElementById("editorSelect");
   if (editorSel) {
