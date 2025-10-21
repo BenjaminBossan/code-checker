@@ -12,6 +12,9 @@ Clone this repository, then run:
 # Analyse one or more directories / files
 python main.py src/ tests/ -o report.json
 
+# Ignore specific files or folders
+python main.py src/ -I src/generated.py docs/legacy/
+
 # Dry-run (shows which .py files will be parsed)
 python main.py src/ --dry-run
 
@@ -19,7 +22,7 @@ python main.py src/ --dry-run
 python main.py src/ --no-duplication
 ```
 
-The command walks every given path recursively, analyses each `.py` file and writes a report (default: `result.json`). Simple progress bars show the current file or duplication analysis step.
+The command walks every given path recursively, analyses each `.py` file and writes a report (default: `result.json`). Simple progress bars show the current file or duplication analysis step. Use `-I/--ignore` to provide one or more files or directories that should be skipped during the analysis.
 
 The package has no third party dependencies.
 
