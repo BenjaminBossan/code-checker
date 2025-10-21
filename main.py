@@ -506,26 +506,56 @@ def prune_tree(node: CodeNode) -> CodeNode:
 ###################
 
 
-def gather_tasks(paths: Sequence[str]) -> list[FileTask]:
+def gather_tasks(
+    paths: Sequence[str], *, ignore: Sequence[str] | None = None
+) -> list[FileTask]:
     """Expand the given paths into a list of `FileTask`s (recursively)."""
 
     tasks: list[FileTask] = []
     seen: set[Path] = set()
+    ignore_files: set[Path] = set()
+    ignore_dirs: set[Path] = set()
+
+    if ignore:
+        for raw_ignore in ignore:
+            ignore_path = Path(raw_ignore).resolve()
+            if not ignore_path.exists():
+                print(
+                    f"warning: ignored path {raw_ignore!s} does not exist",
+                    file=sys.stderr,
+                )
+                continue
+            if ignore_path.is_dir():
+                ignore_dirs.add(ignore_path)
+            else:
+                ignore_files.add(ignore_path)
+
+    def _is_ignored(path: Path) -> bool:
+        if path in ignore_files:
+            return True
+        return any(
+            path == ignored_dir or ignored_dir in path.parents
+            for ignored_dir in ignore_dirs
+        )
 
     for raw in paths:
         p = Path(raw).resolve()
-        if p in seen:
-            continue  # avoid duplicates
+        if p in seen or _is_ignored(p):
+            continue  # avoid duplicates or ignored entries
         if p.is_dir():
-            for root, _, files in os.walk(p):
+            for root, dirs, files in os.walk(p):
                 root_p = Path(root)
+                # prune ignored directories
+                dirs[:] = [d for d in dirs if not _is_ignored((root_p / d).resolve())]
                 for fname in files:
-                    if fname.endswith(".py"):
-                        f = (root_p / fname).resolve()
-                        if not f.is_symlink():
-                            tasks.append(FileTask(f))
-                            seen.add(f)
-        elif p.is_file() and p.suffix == ".py":
+                    if not fname.endswith(".py"):
+                        continue
+                    f = (root_p / fname).resolve()
+                    if f.is_symlink() or _is_ignored(f) or f in seen:
+                        continue
+                    tasks.append(FileTask(f))
+                    seen.add(f)
+        elif p.is_file() and p.suffix == ".py" and not _is_ignored(p):
             tasks.append(FileTask(p))
             seen.add(p)
         else:
@@ -568,13 +598,26 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=True,
         help="Compute code duplication metrics (default: enabled)",
     )
+    parser.add_argument(
+        "-I",
+        "--ignore",
+        action="append",
+        nargs="+",
+        metavar="PATH",
+        default=[],
+        help=(
+            "Paths to files or directories that should be ignored during analysis. "
+            "Repeat the flag to provide multiple entries."
+        ),
+    )
     return parser.parse_args(argv)
 
 
 def main(argv: Sequence[str] | None = None) -> None:  # noqa: N802 – main style
     args = _parse_args(argv)
 
-    tasks = gather_tasks(args.paths)
+    ignore_paths = [item for group in args.ignore for item in group]
+    tasks = gather_tasks(args.paths, ignore=ignore_paths)
 
     if args.dry_run:
         print("Planned analysis ({} file(s)):".format(len(tasks)))
